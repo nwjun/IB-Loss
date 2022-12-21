@@ -64,7 +64,10 @@ python tinyimage_train.py --dataset tinyimagenet -a resnet18 --loss_type CE --tr
 python tinyimage_train.py --dataset tinyimagenet -a resnet18 --loss_type IB --train_rule IBReweight --imb_type exp --imb_factor 0.01 --epochs 100 --lr 0.1  --num_classes 200 --start_ib_epoch 50
 
 ```
-
+## ICText
+```bash
+python ictext_train.py -a resnet18 --loss_type CE --train_rule None --epochs 10 --lr 0.1  --num_classes 62
+```
 ## Citation
 
 If you find our paper and repo useful, please cite our paper
