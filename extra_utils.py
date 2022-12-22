@@ -1,18 +1,12 @@
-import string
 import torch
 import numpy as np
+import json
 
-def get_char2idx_dict():
+def get_char2idx_dict(file='data/ictext2021/char_2_idx.json'):
      # Prepare char_dict
-    count = 0
-    char_dict = {}
-    labels = list(string.digits)
-    labels.extend(list(string.ascii_letters))
-    
-    for x in labels:
-        char_dict[str(x)] = count
-        count += 1
-
+    f = open(file)
+    char_dict = json.load(f)
+    count=62
     char_dict['0_deg'] = count
     count += 1
     char_dict['90_deg'] = count
@@ -23,17 +17,13 @@ def get_char2idx_dict():
 
     return char_dict
 
-def get_idx2char_dict():
+def get_idx2char_dict(file='data/ictext2021/idx_2_char.json'):
      # Prepare char_dict
-    count = 0
-    char_dict = {}
-    labels = list(string.digits)
-    labels.extend(list(string.ascii_letters))
-    
-    for x in labels:
-        char_dict[count] = str(x)
-        count += 1
 
+    f = open(file)
+    char_dict = json.load(f)
+    
+    count=62
     char_dict[count] = '0_deg'
     count += 1
     char_dict[count] = '90_deg'
