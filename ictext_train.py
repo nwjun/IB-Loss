@@ -90,16 +90,16 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Data loading code
     transform_train = transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        # transforms.RandomCrop(img_size, padding=padding),
-        transforms.RandomHorizontalFlip(),
+        transforms.Resize((224,224)),
+        transforms.RandomPerspective(0.5,0.5),
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
+        transforms.GaussianBlur(kernel_size=(5,9), sigma=(0.1, 5)),
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
     ])
 
     transform_val = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
+        transforms.Resize((224,224)),
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
     ])
@@ -341,12 +341,12 @@ def adjust_learning_rate(optimizer, epoch, args):
     epoch = epoch + 1
     if epoch > args.start_ib_epoch and 'IB' in args.loss_type:
         lr = args.lr * 0.01
-        if epoch > 90:
+        if epoch > 30:
             lr = args.lr * 0.001
     else:
         if epoch <= 5:
             lr = args.lr * epoch / 5
-        elif epoch > 90:
+        elif epoch > 30:
             lr = args.lr * 0.1
         #elif epoch > 160:
         #    lr = args.lr * 0.01
