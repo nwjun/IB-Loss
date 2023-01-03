@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import json
 
-def get_char2idx_dict(file='data/ictext2021/char_2_idx.json'):
+def get_char2idx_dict(file='../ols/data/ictext2021/char_2_idx.json'):
      # Prepare char_dict
     f = open(file)
     char_dict = json.load(f)
@@ -17,7 +17,7 @@ def get_char2idx_dict(file='data/ictext2021/char_2_idx.json'):
 
     return char_dict
 
-def get_idx2char_dict(file='data/ictext2021/idx_2_char.json'):
+def get_idx2char_dict(file='../ols/data/ictext2021/idx_2_char.json'):
      # Prepare char_dict
 
     f = open(file)

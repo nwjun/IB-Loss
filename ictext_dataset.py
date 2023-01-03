@@ -12,7 +12,7 @@ class ICTextDataset(Dataset):
 
         self.class_dict = get_char2idx_dict()
         self.all_paths = []
-        self.class_freq = [0] * 66
+        self.class_freq = [0] * 62
         self.targets = []
 
         with open(self.label_path, mode='r') as in_txt:

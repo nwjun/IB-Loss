@@ -79,6 +79,7 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
                 best_acc1 = best_acc1.to(args.gpu)
+            breakpoint()
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
@@ -105,8 +106,8 @@ def main_worker(gpu, ngpus_per_node, args):
     ])
 
 
-    train_dataset = ICTextDataset(data_dir='data/ictext2021', split='train', transform=transform_train)
-    val_dataset = ICTextDataset(data_dir='./data/ictext2021', split='val', transform=transform_val)
+    train_dataset = ICTextDataset(data_dir='/dev/shm/data/ictext2021', split='train', transform=transform_train)
+    val_dataset = ICTextDataset(data_dir='/dev/shm/data/ictext2021', split='val', transform=transform_val)
 
     cls_num_list = train_dataset.get_cls_num_list()
     print('cls num list:')
@@ -131,80 +132,111 @@ def main_worker(gpu, ngpus_per_node, args):
     tf_writer = SummaryWriter(log_dir=os.path.join(args.root_log, args.store_name))
 
     print("Training started!")
+    
+    try:
+        for epoch in range(args.start_epoch, args.epochs):
+            adjust_learning_rate(optimizer, epoch, args)
 
-    for epoch in range(args.start_epoch, args.epochs):
-        adjust_learning_rate(optimizer, epoch, args)
+            if args.train_rule == 'None':
+                train_sampler = None  
+                per_cls_weights = None 
+            elif args.train_rule == 'Resample':
+                train_sampler = ImbalancedDatasetSampler(train_dataset)
+                per_cls_weights = None
+            elif args.train_rule == 'CBReweight':
+                train_sampler = None
+                beta = 0.9999
+                effective_num = 1.0 - np.power(beta, cls_num_list)
+                per_cls_weights = (1.0 - beta) / np.array(effective_num)
+                per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+                per_cls_weights = torch.FloatTensor(per_cls_weights).cuda(args.gpu)
+            elif args.train_rule == 'IBReweight':
+                train_sampler = None
+                per_cls_weights = 1.0 / np.array(cls_num_list)
+                per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+                per_cls_weights = torch.FloatTensor(per_cls_weights).cuda(args.gpu)
+            elif args.train_rule == 'DRW':
+                train_sampler = None
+                idx = epoch // 160
+                betas = [0, 0.9999]
+                effective_num = 1.0 - np.power(betas[idx], cls_num_list)
+                per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
+                per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+                per_cls_weights = torch.FloatTensor(per_cls_weights).cuda(args.gpu)
+            else:
+                warnings.warn('Sample rule is not listed')
 
-        if args.train_rule == 'None':
-            train_sampler = None  
-            per_cls_weights = None 
-        elif args.train_rule == 'Resample':
-            train_sampler = ImbalancedDatasetSampler(train_dataset)
-            per_cls_weights = None
-        elif args.train_rule == 'CBReweight':
-            train_sampler = None
-            beta = 0.9999
-            effective_num = 1.0 - np.power(beta, cls_num_list)
-            per_cls_weights = (1.0 - beta) / np.array(effective_num)
-            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
-            per_cls_weights = torch.FloatTensor(per_cls_weights).cuda(args.gpu)
-        elif args.train_rule == 'IBReweight':
-            train_sampler = None
-            per_cls_weights = 1.0 / np.array(cls_num_list)
-            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
-            per_cls_weights = torch.FloatTensor(per_cls_weights).cuda(args.gpu)
-        elif args.train_rule == 'DRW':
-            train_sampler = None
-            idx = epoch // 160
-            betas = [0, 0.9999]
-            effective_num = 1.0 - np.power(betas[idx], cls_num_list)
-            per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
-            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
-            per_cls_weights = torch.FloatTensor(per_cls_weights).cuda(args.gpu)
-        else:
-            warnings.warn('Sample rule is not listed')
+            criterion_ib = None
+            if args.loss_type == 'CE':
+                criterion = nn.CrossEntropyLoss(weight=per_cls_weights).cuda(args.gpu)
+            elif args.loss_type == 'LDAM':
+                criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, weight=per_cls_weights).cuda(args.gpu)
+            elif args.loss_type == 'Focal':
+                criterion = FocalLoss(weight=per_cls_weights, gamma=1).cuda(args.gpu)
+            elif args.loss_type == 'IB':
+                criterion = nn.CrossEntropyLoss(weight=None).cuda(args.gpu)
+                criterion_ib = IBLoss(weight=per_cls_weights, alpha=1000).cuda(args.gpu)
+            elif args.loss_type == 'IBFocal':
+                criterion = nn.CrossEntropyLoss(weight=None).cuda(args.gpu)
+                criterion_ib = IB_FocalLoss(weight=per_cls_weights, alpha=1000, gamma=1).cuda(args.gpu)
+            else:
+                warnings.warn('Loss type is not listed')
+                return
 
-        criterion_ib = None
-        if args.loss_type == 'CE':
-            criterion = nn.CrossEntropyLoss(weight=per_cls_weights).cuda(args.gpu)
-        elif args.loss_type == 'LDAM':
-            criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, weight=per_cls_weights).cuda(args.gpu)
-        elif args.loss_type == 'Focal':
-            criterion = FocalLoss(weight=per_cls_weights, gamma=1).cuda(args.gpu)
-        elif args.loss_type == 'IB':
-            criterion = nn.CrossEntropyLoss(weight=None).cuda(args.gpu)
-            criterion_ib = IBLoss(weight=per_cls_weights, alpha=1000).cuda(args.gpu)
-        elif args.loss_type == 'IBFocal':
-            criterion = nn.CrossEntropyLoss(weight=None).cuda(args.gpu)
-            criterion_ib = IB_FocalLoss(weight=per_cls_weights, alpha=1000, gamma=1).cuda(args.gpu)
-        else:
-            warnings.warn('Loss type is not listed')
-            return
+            # train for one epoch
+            train(train_loader, model, criterion, criterion_ib, optimizer, epoch, args, log_training, tf_writer)
 
-        # train for one epoch
-        train(train_loader, model, criterion, criterion_ib, optimizer, epoch, args, log_training, tf_writer)
+            # evaluate on validation set
+            acc1 = validate(val_loader, model, criterion, criterion_ib, epoch, args, log_testing, tf_writer)
+
+
+            # remember best acc@1 and save checkpoint
+            is_best = acc1 > best_acc1
+            best_acc1 = max(acc1, best_acc1)
+
+            tf_writer.add_scalar('acc/test_top1_best', best_acc1, epoch)
+            output_best = 'Best Prec@1: %.3f\n' % (best_acc1)
+            print(output_best)
+            log_testing.write(output_best + '\n')
+            log_testing.flush()
+            
+            if args.gpu is not None:
+                save_checkpoint(args, {
+                    'epoch': epoch + 1,
+                    'arch': args.arch,
+                    'state_dict': model.state_dict(),
+                    'best_acc1': best_acc1,
+                    'optimizer' : optimizer.state_dict(),
+                }, is_best)
+            else:
+                save_checkpoint(args, {
+                    'epoch': epoch + 1,
+                    'arch': args.arch,
+                    'state_dict': model.module.state_dict(),
+                    'best_acc1': best_acc1,
+                    'optimizer' : optimizer.state_dict(),
+                }, is_best)
+    except:
+        pass
+    finally:
+        filename = '%s/%s/last.pth.tar' % (args.root_model, args.store_name)
         
-        # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, criterion_ib, epoch, args, log_testing, tf_writer)
-
-
-        # remember best acc@1 and save checkpoint
-        is_best = acc1 > best_acc1
-        best_acc1 = max(acc1, best_acc1)
-
-        tf_writer.add_scalar('acc/test_top1_best', best_acc1, epoch)
-        output_best = 'Best Prec@1: %.3f\n' % (best_acc1)
-        print(output_best)
-        log_testing.write(output_best + '\n')
-        log_testing.flush()
-
-        save_checkpoint(args, {
-            'epoch': epoch + 1,
-            'arch': args.arch,
-            'state_dict': model.state_dict(),
-            'best_acc1': best_acc1,
-            'optimizer' : optimizer.state_dict(),
-        }, is_best)
+        if args.gpu is not None:
+            torch.save({
+                'epoch': epoch + 1,
+                'arch': args.arch,
+                'state_dict': model.state_dict(),
+                'best_acc1': best_acc1,
+                'optimizer' : optimizer.state_dict(),
+            }, filename)
+        else:
+            torch.save({
+                'epoch': epoch + 1,
+                'arch': args.arch,
+                'state_dict': model.module.state_dict(),
+                'best_acc1': best_acc1,
+                'optimizer' : optimizer.state_dict(),
+            }, filename)
 
 def train(train_loader, model, criterion, criterion_ib, optimizer, epoch, args, log, tf_writer):
     batch_time = AverageMeter('Time', ':6.3f')
