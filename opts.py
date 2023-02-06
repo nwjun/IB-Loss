@@ -50,3 +50,5 @@ parser.add_argument('--gpu', default=None, type=int,
                     help='GPU id to use.')
 parser.add_argument('--root_log',type=str, default='log')
 parser.add_argument('--root_model', type=str, default='checkpoint')
+parser.add_argument('--mixup', action='store_true')
+parser.add_argument('--alpha', type=float, default=1.0)

@@ -28,6 +28,7 @@ def main():
     args = parser.parse_args()
     args.store_name = '_'.join([args.dataset, args.arch, args.loss_type, args.train_rule, args.imb_type, str(args.imb_factor), args.exp_str])
     prepare_folders(args)
+    print(f'Mixup:{args.mixup}, Alpha: {args.alpha} ')
     if args.seed is not None:
         torch.manual_seed(args.seed)
         cudnn.deterministic = True
@@ -226,13 +227,21 @@ def train(train_loader, model, criterion, criterion_ib, optimizer, epoch, args, 
             input = input.cuda(args.gpu, non_blocking=True)
         target = target.cuda(args.gpu, non_blocking=True)
 
+        if args.mixup and epoch < args.start_ib_epoch:
+            input, targets_a, targets_b, lam = mixup_data(input, target, alpha=args.alpha)
         # compute output
         if 'IB' in args.loss_type and epoch >= args.start_ib_epoch:
             output, features = model(input)
-            loss = criterion_ib(output, target, features)
+            if args.mixup and epoch < args.start_ib_epoch:
+                loss = mixup_criterion_ib(criterion_ib, features, output, targets_a, targets_b, lam)
+            else:    
+                loss = criterion_ib(output, target, features)
         else:
             output, _ = model(input)
-            loss = criterion(output, target)
+            if args.mixup and epoch < args.start_ib_epoch:
+                loss = mixup_criterion(criterion, output, targets_a, targets_b, lam)
+            else:
+                loss = criterion(output, target)
 
         # measure accuracy and record loss
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
