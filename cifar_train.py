@@ -26,7 +26,9 @@ best_acc1 = 0
 
 def main():
     args = parser.parse_args()
-    args.store_name = '_'.join([args.dataset, args.arch, args.loss_type, args.train_rule, args.imb_type, str(args.imb_factor), args.exp_str])
+    
+    args.store_name = '_'.join([args.dataset, args.arch, args.loss_type, args.train_rule, args.imb_type, str(args.imb_factor), args.exp_str, 'mixup' if args.mixup else ''])
+    
     prepare_folders(args)
     print(f'Mixup:{args.mixup}, Alpha: {args.alpha} ')
     if args.seed is not None:
@@ -370,3 +372,4 @@ def adjust_learning_rate(optimizer, epoch, args):
 
 if __name__ == '__main__':
     main()
+
