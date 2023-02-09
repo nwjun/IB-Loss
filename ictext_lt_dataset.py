@@ -26,7 +26,10 @@ class ICTextLTDataset(Dataset):
                 self.all_paths.append(line[0])
         
         if split == 'train':
-            img_num_list = self.get_img_num_per_cls(self.imb_num_class, imb_type, imb_factor)
+            if imb_factor == 0: # original imbalance, 6155/334 = 18.43
+                img_num_list = self.class_freq[:self.imb_num_class]
+            else:
+                img_num_list = self.get_img_num_per_cls(self.imb_num_class, imb_type, imb_factor)
             self.gen_imbalanced_data(img_num_list)
         else:
             class_freq = np.asarray(self.class_freq[:self.imb_num_class])
@@ -87,6 +90,9 @@ class ICTextLTDataset(Dataset):
             image = self.transform(image)
  
         return image, (label)
+
+    def get_cls_num_list(self, verbose=False):
+        return self.class_freq
         
 if __name__ == '__main__':
     ictext_LT_train = ICTextLTDataset('/home/jun/Documents/GitHub/ols/data/ictext2021', 'train', imb_factor=0.01,

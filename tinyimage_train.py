@@ -111,9 +111,9 @@ def main_worker(gpu, ngpus_per_node, args):
     ])
 
 
-    train_dataset = IMBALANETINYIMGNET(root='./data/tiny-imagenet-200/train/', imb_type=args.imb_type, imb_factor=args.imb_factor,
+    train_dataset = IMBALANETINYIMGNET(root='../ols/data/tiny-imagenet-200/train/', imb_type=args.imb_type, imb_factor=args.imb_factor,
                                       rand_number=args.rand_number, transform=transform_train)
-    val_dataset = IMBALANETINYIMGNET(root='./data/tiny-imagenet-200/val/', imb_type=args.imb_type, imb_factor=1.,
+    val_dataset = IMBALANETINYIMGNET(root='../ols/data/tiny-imagenet-200/val/', imb_type=args.imb_type, imb_factor=1.,
                                     rand_number=args.rand_number, transform=transform_val)
 
     cls_num_list = train_dataset.get_cls_num_list()
@@ -166,7 +166,7 @@ def main_worker(gpu, ngpus_per_node, args):
             per_cls_weights = torch.FloatTensor(per_cls_weights).cuda(args.gpu)
         elif args.train_rule == 'DRW':
             train_sampler = None
-            idx = epoch // 160
+            idx = epoch // 50
             betas = [0, 0.9999]
             effective_num = 1.0 - np.power(betas[idx], cls_num_list)
             per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
@@ -179,7 +179,7 @@ def main_worker(gpu, ngpus_per_node, args):
         if args.loss_type == 'CE':
             criterion = nn.CrossEntropyLoss(weight=per_cls_weights).cuda(args.gpu)
         elif args.loss_type == 'LDAM':
-            criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, weight=per_cls_weights).cuda(args.gpu)
+            criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=1, weight=per_cls_weights).cuda(args.gpu)
         elif args.loss_type == 'Focal':
             criterion = FocalLoss(weight=per_cls_weights, gamma=1).cuda(args.gpu)
         elif args.loss_type == 'IB':
@@ -350,7 +350,7 @@ def validate(val_loader, model, criterion, criterion_ib, epoch, args, log=None, 
 def adjust_learning_rate(optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     epoch = epoch + 1
-    if epoch > args.start_ib_epoch and 'IB' in args.loss_type:
+    if epoch > args.start_ib_epoch and ('IB' in args.loss_type or 'DRW' in args.train_rule):
         lr = args.lr * 0.01
         if epoch > 90:
             lr = args.lr * 0.001

@@ -106,8 +106,8 @@ def main_worker(gpu, ngpus_per_node, args):
     ])
 
 
-    train_dataset = ICTextLTDataset(data_dir='/dev/shm/data/ictext2021', split='train', transform=transform_train)
-    val_dataset = ICTextLTDataset(data_dir='/dev/shm/data/ictext2021', split='val', transform=transform_val)
+    train_dataset = ICTextLTDataset(data_dir='/dev/shm/ictext2021', split='train', transform=transform_train, imb_factor=args.imb_factor)
+    val_dataset = ICTextLTDataset(data_dir='/dev/shm/ictext2021', split='val', transform=transform_val, imb_factor=args.imb_factor)
 
     cls_num_list = train_dataset.get_cls_num_list()
     print('cls num list:')
@@ -157,7 +157,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 per_cls_weights = torch.FloatTensor(per_cls_weights).cuda(args.gpu)
             elif args.train_rule == 'DRW':
                 train_sampler = None
-                idx = epoch // 160
+                idx = epoch // 20
                 betas = [0, 0.9999]
                 effective_num = 1.0 - np.power(betas[idx], cls_num_list)
                 per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
@@ -170,7 +170,7 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.loss_type == 'CE':
                 criterion = nn.CrossEntropyLoss(weight=per_cls_weights).cuda(args.gpu)
             elif args.loss_type == 'LDAM':
-                criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, weight=per_cls_weights).cuda(args.gpu)
+                criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=1, weight=per_cls_weights).cuda(args.gpu)
             elif args.loss_type == 'Focal':
                 criterion = FocalLoss(weight=per_cls_weights, gamma=1).cuda(args.gpu)
             elif args.loss_type == 'IB':
