@@ -182,7 +182,7 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.loss_type == 'CE':
                 criterion = nn.CrossEntropyLoss(weight=per_cls_weights).cuda(args.gpu)
             elif args.loss_type == 'LDAM':
-                criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, weight=per_cls_weights).cuda(args.gpu)
+                criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=10, weight=per_cls_weights).cuda(args.gpu)
             elif args.loss_type == 'Focal':
                 criterion = FocalLoss(weight=per_cls_weights, gamma=1).cuda(args.gpu)
             elif args.loss_type == 'IB':
@@ -386,19 +386,17 @@ def adjust_learning_rate(optimizer, epoch, args):
     epoch = epoch + 1
     if epoch > args.start_ib_epoch and 'IB' in args.loss_type:
         lr = args.lr * 0.01
-        if epoch > 60:
-            lr = args.lr * 0.0001
-        elif epoch > 80:
+        if epoch > 80:
             lr = args.lr * 0.000001
+        elif epoch > 60:
+            lr = args.lr * 0.0001
     else:
         if epoch <= 5:
             lr = args.lr * epoch / 5
-        elif epoch > 60:
-            lr = args.lr * 0.01
         elif epoch > 80:
             lr = args.lr * 0.0001
-        #elif epoch > 160:
-        #    lr = args.lr * 0.01
+        elif epoch > 60:
+            lr = args.lr * 0.01
         else:
             lr = args.lr
     for param_group in optimizer.param_groups:
