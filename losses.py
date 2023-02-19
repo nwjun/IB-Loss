@@ -12,6 +12,8 @@ elif args.dataset == 'cifar10':
     num_classes = 10
 elif args.dataset == 'tinyimagenet':
     num_classes = 200
+elif args.dataset == 'ictext_lt':
+    num_classes = 36
 else: #iNat18
     num_classes = 8142
 

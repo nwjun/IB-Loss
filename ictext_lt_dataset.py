@@ -26,7 +26,7 @@ class ICTextLTDataset(Dataset):
                 self.all_paths.append(line[0])
         
         if split == 'train':
-            if imb_factor == 0: # original imbalance, 6155/334 = 18.43
+            if imb_factor == -1: # original imbalance, 6155/334 = 18.43
                 img_num_list = self.class_freq[:self.imb_num_class]
             else:
                 img_num_list = self.get_img_num_per_cls(self.imb_num_class, imb_type, imb_factor)

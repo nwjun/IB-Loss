@@ -20,7 +20,17 @@ from ictext_lt_dataset import ICTextLTDataset
 from losses import LDAMLoss, FocalLoss, IBLoss, IB_FocalLoss
 from opts import parser
 import datetime
+import torchvision.transforms.functional as F
 best_acc1 = 0
+
+class SquarePad:
+	def __call__(self, image):
+		s = image.size
+		max_wh = np.max([s[-1], s[-2]])
+		hp = int((max_wh - s[-1]) / 2)
+		vp = int((max_wh - s[-2]) / 2)
+		padding = (hp, vp, hp, vp)
+		return F.pad(image, padding, 0, 'constant')
 
 def main():
     args = parser.parse_args()
@@ -53,7 +63,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # create model
     print("=> creating model '{}'".format(args.arch))
-    model = models.__dict__[args.arch](pretrained = True)
+    model = models.__dict__[args.arch](pretrained = False)
     last_layer_name = 'fc'
     feature_dim = getattr(model, last_layer_name).in_features
     setattr(model, last_layer_name, nn.Linear(feature_dim, args.num_classes))
@@ -88,26 +98,28 @@ def main_worker(gpu, ngpus_per_node, args):
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     cudnn.benchmark = True
-
+    mean= [0.276, 0.262, 0.261]
+    std= [0.239, 0.229, 0.227]
     # Data loading code
     transform_train = transforms.Compose([
-        transforms.Resize((224,224)),
-        transforms.RandomPerspective(0.5,0.5),
-        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
-        transforms.GaussianBlur(kernel_size=(5,9), sigma=(0.1, 5)),
+        SquarePad(),
+        transforms.Resize(size=(32,32)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        transforms.Normalize(mean=mean,std=std),
     ])
 
     transform_val = transforms.Compose([
-        transforms.Resize((224,224)),
+        SquarePad(),
+        transforms.Resize(size=(32,32)),
         transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        transforms.Normalize(mean=mean,std=std),
     ])
 
 
-    train_dataset = ICTextLTDataset(data_dir='/dev/shm/ictext2021', split='train', transform=transform_train, imb_factor=args.imb_factor)
-    val_dataset = ICTextLTDataset(data_dir='/dev/shm/ictext2021', split='val', transform=transform_val, imb_factor=args.imb_factor)
+    train_dataset = ICTextLTDataset(data_dir='/home/cc/Documents/GitHub/ols/data/ictext2021', split='train', transform=transform_train, imb_factor=args.imb_factor)
+    val_dataset = ICTextLTDataset(data_dir='/home/cc/Documents/GitHub/ols/data/ictext2021', split='val', transform=transform_val, imb_factor=args.imb_factor)
 
     cls_num_list = train_dataset.get_cls_num_list()
     print('cls num list:')
@@ -170,7 +182,7 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.loss_type == 'CE':
                 criterion = nn.CrossEntropyLoss(weight=per_cls_weights).cuda(args.gpu)
             elif args.loss_type == 'LDAM':
-                criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=1, weight=per_cls_weights).cuda(args.gpu)
+                criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, weight=per_cls_weights).cuda(args.gpu)
             elif args.loss_type == 'Focal':
                 criterion = FocalLoss(weight=per_cls_weights, gamma=1).cuda(args.gpu)
             elif args.loss_type == 'IB':
@@ -216,8 +228,9 @@ def main_worker(gpu, ngpus_per_node, args):
                     'best_acc1': best_acc1,
                     'optimizer' : optimizer.state_dict(),
                 }, is_best)
-    except:
-        pass
+    except Exception as err:
+        print('error')
+        print(err)
     finally:
         filename = '%s/%s/last.pth.tar' % (args.root_model, args.store_name)
         
@@ -373,13 +386,17 @@ def adjust_learning_rate(optimizer, epoch, args):
     epoch = epoch + 1
     if epoch > args.start_ib_epoch and 'IB' in args.loss_type:
         lr = args.lr * 0.01
-        if epoch > 30:
-            lr = args.lr * 0.001
+        if epoch > 60:
+            lr = args.lr * 0.0001
+        elif epoch > 80:
+            lr = args.lr * 0.000001
     else:
         if epoch <= 5:
             lr = args.lr * epoch / 5
-        elif epoch > 30:
-            lr = args.lr * 0.1
+        elif epoch > 60:
+            lr = args.lr * 0.01
+        elif epoch > 80:
+            lr = args.lr * 0.0001
         #elif epoch > 160:
         #    lr = args.lr * 0.01
         else:
